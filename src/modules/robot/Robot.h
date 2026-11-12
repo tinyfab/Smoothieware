@@ -32,6 +32,7 @@ class Robot : public Module {
         Robot();
         void on_module_loaded();
         void on_gcode_received(void* argument);
+        void after_config();
 
         void reset_axis_position(float position, int axis);
         void reset_axis_position(float x, float y, float z);
@@ -62,6 +63,8 @@ class Robot : public Module {
         bool delta_move(const float delta[], float rate_mm_s, uint8_t naxis);
         uint8_t register_motor(StepperMotor*);
         uint8_t get_number_registered_motors() const {return n_motors; }
+        void enable_backlash_compensation(bool flg);
+        bool get_backlash_enabled() const;
 
         BaseSolution* arm_solution;                           // Selected Arm solution ( millimeters to step calculation )
 
@@ -95,6 +98,7 @@ class Robot : public Module {
             uint8_t plane_axis_0:2;                           // Current plane ( XY, XZ, YZ )
             uint8_t plane_axis_1:2;
             uint8_t plane_axis_2:2;
+            bool no_laser:1;
         };
 
     private:
@@ -114,7 +118,6 @@ class Robot : public Module {
         void process_move(Gcode *gcode, enum MOTION_MODE_T);
         bool is_homed(uint8_t i) const;
 
-        float theta(float x, float y);
         void select_plane(uint8_t axis_0, uint8_t axis_1, uint8_t axis_2);
         void clear_tool_offset();
         int get_active_extruder() const;

@@ -72,7 +72,7 @@ void Switch::on_halt(void *arg)
             case SWPWM: this->swpwm_pin->write(switch_value/100.0F); break;
             case NONE: return;
         }
-        this->switch_state= this->failsafe;
+        this->switch_state= this->haltsetting;
     }
 }
 
@@ -271,7 +271,6 @@ void Switch::on_config_reload(void *argument)
         }
     }
 
-
     if(this->output_type == SIGMADELTA) {
         // SIGMADELTA
         THEKERNEL->slow_ticker->attach(1000, this->sigmadelta_pin, &Pwm::on_tick);
@@ -280,7 +279,14 @@ void Switch::on_config_reload(void *argument)
     // for commands we need to replace _ for space
     std::replace(output_on_command.begin(), output_on_command.end(), '_', ' '); // replace _ with space
     std::replace(output_off_command.begin(), output_off_command.end(), '_', ' '); // replace _ with space
-}
+
+    // Special handling of $J STOP to stop continuous jog
+    // $J STOP is a special command executed in pinpoll tick
+    this->handle_stop_cmd = false;
+    if(is_input && output_off_command == "$J STOP") {
+        this->handle_stop_cmd = true;
+    }
+ }
 
 bool Switch::match_input_on_gcode(const Gcode *gcode) const
 {
@@ -335,7 +341,7 @@ void Switch::on_gcode_received(void *argument)
                 if(v > 100) v= 100;
                 else if(v < 0) v= 0;
                 this->pwm_pin->write(v/100.0F);
-                this->switch_state= (ROUND2DP(v) != ROUND2DP(this->switch_value));
+                this->switch_state= !(ROUND2DP(v) <= ROUND2DP(this->switch_value));
             } else {
                 this->pwm_pin->write(this->default_on_value/100.0F);
                 this->switch_state= true;
@@ -350,7 +356,7 @@ void Switch::on_gcode_received(void *argument)
                 if(v > 100) v= 100;
                 else if(v < 0) v= 0;
                 this->swpwm_pin->write(v/100.0F);
-                this->switch_state= (ROUND2DP(v) != ROUND2DP(this->switch_value));
+                this->switch_state= !(ROUND2DP(v) <= ROUND2DP(this->switch_value));
             } else {
                 this->swpwm_pin->write(this->default_on_value/100.0F);
                 this->switch_state= true;
@@ -427,7 +433,18 @@ void Switch::on_main_loop(void *argument)
 {
     if(this->switch_changed) {
         if(this->switch_state) {
-            if(!this->output_on_command.empty()) this->send_gcode( this->output_on_command, &(StreamOutput::NullStream) );
+            if(!this->output_on_command.empty()) {
+                if(this->output_on_command.substr(0, 5) == "FAULT") {
+                    // handle a FAULT command
+                    if(!THEKERNEL->is_halted()) {
+                        THEKERNEL->call_event(ON_HALT, nullptr);
+                        THEKERNEL->streams->printf("A FAULT has been detected: %s\n", this->output_on_command.c_str());
+                    }
+
+                } else {
+                    this->send_gcode( this->output_on_command, &(StreamOutput::NullStream) );
+                }
+            }
 
             if(this->output_type == SIGMADELTA) {
                 this->sigmadelta_pin->pwm(this->switch_value); // this requires the value has been set otherwise it switches on to whatever it last was
@@ -491,6 +508,13 @@ uint32_t Switch::pinpoll_tick(uint32_t dummy)
             }
         }
     }
+
+    if(this->handle_stop_cmd && this->switch_changed && !this->switch_state) {
+        // Special handling of $J STOP to stop continuous jog
+        THEKERNEL->set_stop_request(true);
+        this->switch_changed = false;
+    }
+
     return 0;
 }
 
@@ -507,4 +531,3 @@ void Switch::send_gcode(std::string msg, StreamOutput *stream)
     message.stream = stream;
     THEKERNEL->call_event(ON_CONSOLE_LINE_RECEIVED, &message );
 }
-

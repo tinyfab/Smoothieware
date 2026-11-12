@@ -668,6 +668,8 @@ bool CartGridStrategy::doProbe(Gcode *gc)
     float max_delta= fabs(z_reference);
 
     // probe all the points of the grid
+    int probe_cnt = current_grid_y_size * current_grid_x_size;
+    int ncnt= 0;
     for (int yCount = 0; yCount < this->current_grid_y_size; yCount++) {
         float yProbe = this->y_start + (this->y_size / (this->current_grid_y_size - 1)) * yCount;
         int xStart, xStop, xInc;
@@ -689,7 +691,7 @@ bool CartGridStrategy::doProbe(Gcode *gc)
             }
 
             float measured_z = zprobe->getProbeHeight() - mm - z_reference; // this is the delta z from bed at 0,0
-            gc->stream->printf("DEBUG: X%1.3f, Y%1.3f, Z%1.3f\n", xProbe, yProbe, measured_z);
+            gc->stream->printf("DEBUG: X%1.3f, Y%1.3f, Z%1.3f, %d/%d\n", xProbe, yProbe, measured_z, ++ncnt, probe_cnt);
             grid[xCount + (this->current_grid_x_size * yCount)] = measured_z;
             if(fabs(measured_z) > max_delta) max_delta= fabs(measured_z);
         }

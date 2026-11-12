@@ -22,7 +22,6 @@
 #include <inttypes.h>
 
 using std::string;
-#include <vector>
 
 #define STEP_TICKER_FREQUENCY THEKERNEL->step_ticker->get_frequency()
 
@@ -90,6 +89,15 @@ void Block::clear()
         tick_info[i].steps_to_move= 0;
         tick_info[i].step_count= 0;
         tick_info[i].next_accel_event= 0;
+    }
+}
+
+// Only used for continuous mode to reuse the same block over and over
+void Block::reset(tickinfo_t *saved)
+{
+    for(int i = 0; i < n_actuators; ++i) {
+        if(saved[i].steps_to_move == 0) continue;
+        tick_info[i]= saved[i];
     }
 }
 
@@ -195,6 +203,10 @@ void Block::calculate_trapezoid( float entryspeed, float exitspeed )
     uint32_t deceleration_ticks = floorf( time_to_decelerate * STEP_TICKER_FREQUENCY );
     uint32_t total_move_ticks   = floorf( total_move_time    * STEP_TICKER_FREQUENCY );
 
+    // Each value is floored on its own, so the deceleration can come out longer than the whole move.
+    // decelerate_after is unsigned: without this clamp it would wrap to ~4 billion and the block would never decelerate.
+    if (deceleration_ticks > total_move_ticks) deceleration_ticks = total_move_ticks;
+
     // Now deduce the plateau time for those new values expressed in tick
     //uint32_t plateau_ticks = total_move_ticks - acceleration_ticks - deceleration_ticks;
 
@@ -208,6 +220,12 @@ void Block::calculate_trapezoid( float entryspeed, float exitspeed )
     // we have a potential race condition here as we could get interrupted anywhere in the middle of this call, we need to lock
     // the updates to the blocks to get around it
     this->locked= true;
+    // is_ticking was tested at the top, but the maths above takes a while and the step ticker may have started this block since.
+    // The ticker only starts unlocked blocks and can't be preempted by us, so after locking one of us has won: if it's ticking now, leave it alone
+    if (is_ticking) {
+        this->locked= false;
+        return;
+    }
     // Now figure out the two acceleration ramp change events in ticks
     this->accelerate_until = acceleration_ticks;
     this->decelerate_after = total_move_ticks - deceleration_ticks;

@@ -33,6 +33,11 @@ StepperMotor::StepperMotor(Pin &step, Pin &dir, Pin &en) : step_pin(step), dir_p
     enable(false);
     unstep(); // initialize step pin
     set_direction(false); // initialize dir pin
+#ifdef BACKLASH
+    last_direction = 0;  // no initial direction set yet
+    backlash_mm = 0.0F;
+    backlash_enabled = false;
+#endif
 
     this->register_for_event(ON_HALT);
     this->register_for_event(ON_ENABLE);
@@ -99,7 +104,7 @@ int32_t StepperMotor::steps_to_target(float target)
 }
 
 // Does a manual step pulse, used for direct encoder control of a stepper
-// NOTE this is experimental and may change and/or be reomved in the future, it is an unsupported feature.
+// NOTE this is experimental and may change and/or be removed in the future, it is an unsupported feature.
 // use at your own risk
 void StepperMotor::manual_step(bool dir)
 {
@@ -121,3 +126,22 @@ void StepperMotor::manual_step(bool dir)
     // keep track of actuators actual position in steps
     this->current_position_steps += (dir ? -1 : 1);
 }
+
+#ifdef BACKLASH
+// checks if the direction has changed and if so returns the number of steps needed to compensate for backlash
+// always a positive number of steps
+int32_t StepperMotor::get_backlash_steps(int32_t st)
+{
+    uint8_t d = (st < 0) ? 1 : 2;
+    uint8_t l = last_direction;
+
+    if(d == last_direction) return 0;  // not a change in direction
+    last_direction = d;
+
+    // we ignore the very first move as we don't know what the last direction would have been
+    if(l == 0) return 0;
+    if(!backlash_enabled) return 0;
+
+    return lroundf(backlash_mm * steps_per_mm);
+}
+#endif

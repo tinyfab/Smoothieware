@@ -21,8 +21,13 @@ BlockQueue::BlockQueue(unsigned int length)
     head_i = tail_i = 0;
     isr_tail_i = tail_i;
     void *v= AHB0.alloc(sizeof(Block) * length);
+    if (v == nullptr) {
+        // not enough memory: stay empty with length 0, the caller can try resize() with a smaller length
+        ring = nullptr;
+        this->length = 0;
+        return;
+    }
     ring = new(v) Block[length];
-    // TODO: handle allocation failure
     this->length = length;
 }
 
@@ -82,19 +87,6 @@ Block& BlockQueue::tail()
 Block& BlockQueue::item(unsigned int i)
 {
     return ring[i];
-}
-
-void BlockQueue::push_front(Block& item)
-{
-    ring[head_i] = item;
-    head_i = next(head_i);
-}
-
-Block& BlockQueue::pop_back()
-{
-    Block& r = ring[tail_i];
-    tail_i = next(tail_i);
-    return r;
 }
 
 /*
@@ -182,6 +174,8 @@ bool BlockQueue::resize(unsigned int length)
 
         // Note: we don't use realloc so we can fall back to the existing ring if allocation fails
         void *v= AHB0.alloc(sizeof(Block) * length);
+        if (v == nullptr)
+            return false; // placement new on a null pointer would write to address 0
         Block* newring = new(v) Block[length];
 
         if (newring != nullptr)
@@ -212,30 +206,3 @@ bool BlockQueue::resize(unsigned int length)
 
     return false;
 }
-
-// bool BlockQueue::provide(Block* buffer, unsigned int length)
-// {
-//     __disable_irq();
-
-//     if (is_empty())
-//     {
-//         Block* oldring = ring;
-
-//         if ((buffer != nullptr) && (length > 0))
-//         {
-//             ring = buffer;
-//             this->length = length;
-//             head_i = tail_i = 0;
-
-//             __enable_irq();
-
-//             if (oldring != nullptr)
-//                 delete [] oldring;
-//             return true;
-//         }
-//     }
-
-//     __enable_irq();
-
-//     return false;
-// }

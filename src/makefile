@@ -19,7 +19,7 @@ WRITE_BUFFER_DISABLE=0
 # specific amount of space for the stack.  The heap's growth will be
 # constrained to reserve this much space for the stack and the stack won't be
 # able to grow larger than this amount.
-STACK_SIZE=3072
+STACK_SIZE=3584
 
 # Set to 1 to allow MRI debug monitor to take full control of UART0 and use it
 # as a dedicated debug channel.  If you are using the USB based serial port for
@@ -77,8 +77,13 @@ else
 # 3D build excludes these
 export EXCLUDE_MODULES = tools/drillingcycles tools/spindle
 endif
-
 endif
+endif
+
+ifeq "$(BACKLASH)" "1"
+DEFINES += -DBACKLASH
+$(info **NOTE** Including BACKLASH compensation)
+
 endif
 
 ifneq "$(INCLUDE_MODULE)" ""

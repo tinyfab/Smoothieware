@@ -75,7 +75,8 @@ class Panel : public Module {
         void set_playing_file(std::string f);
         const char* get_playing_file() { return playing_file; }
 
-        std::string getMessage() { return message; }
+        // return by reference: callers keep c_str() pointers, which dangle if this returns a temporary copy
+        const std::string& getMessage() const { return message; }
         bool hasMessage() { return message.size() > 0; }
 
         uint16_t get_screen_lines() const { return screen_lines; }
